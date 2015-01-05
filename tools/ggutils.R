@@ -46,3 +46,39 @@ multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
     }
   }
 }
+
+### plot for kernel density estimation, with shading area
+kde_shading <- function(x, alternative = c("less", "greater", "two.sided"),
+                        xfun = identity, prob = .025,
+                        ## curve color, shading color, shading alpha
+                        ccolor = "steelblue", scolor = "red", salpha = .5,
+                        ...) {
+    alternative <- match.arg(alternative)
+    x <- xfun(x)
+    ## kernel density estimation
+    kde <- with(density(x), data.frame(x, y))
+    probs <- sort(c(prob, 1 - prob))
+    quants <- quantile(x, probs = probs)
+    local_env <- environment()
+    ## NOTICE: by default, ggplot2 searches the global environment
+    p <- ggplot(as.data.frame(x), environment = local_env) +
+        stat_density(aes(x = x), geom = "line", color = ccolor, ...)
+    if (alternative == "less") {
+        probs <- probs[1]
+        quants <- quants[1]
+        shading_data <- subset(kde, x < quants)
+    } else if (alternative == "greater") {
+        probs <- probs[2]
+        quants <- quants[2]
+        shading_data <- subset(kde, x > quants)
+    } else { ## two.sided
+        lower_data <- subset(kde, x < quants[1])
+        p <- p + geom_ribbon(data = lower_data, aes(x = x, ymax = y), ymin = 0,
+                             fill = scolor, alpha = salpha)
+        shading_data <- subset(kde, x > quants[2])
+    }
+    p + geom_ribbon(data = shading_data, aes(x = x, ymax = y), ymin = 0,
+                    fill = scolor, alpha = salpha) +
+        annotate("text", x = quants, y = 0,
+                 label = sprintf("%.2f (%.2f%%)", quants, probs * 100))
+}
